@@ -1,6 +1,6 @@
 # Dependency
 library(SNFtool)
-dyn.load("code/R/projsplx_R.so")
+dyn.load("R/projsplx_R.so")
 # dyn.load("/Users/miaoyuqi/Library/Mobile Documents/com~apple~CloudDocs/Research/DEP_SIMLR/code/R/projsplx_R.so")
 # Main functions
 ## kernel_list_generation: generate kernel list given data list and distance list, options for diffusion provided
@@ -34,7 +34,7 @@ kernel_list_generation = function(data_list = NA, distance_list = NA,
   return(kernel_list)
 }
 
-## part_cimlr
+## parties
 # Input:
 # * kernel_list: kernels/affinity matrix generated from kernel_list_generation function, or any other similarity matrix, symmetric, semi-pos-def
 # * k: numbers of neighbors in KNN, indicating the structure of single data
@@ -54,17 +54,16 @@ kernel_list_generation = function(data_list = NA, distance_list = NA,
 # Notes:
 # lambda in the code is the gamma, beta in overleaf
 # generate kernel list before optimization
-part_cimlr = function(kernel_list,
-                      k = 10,
-                      c,
-                      neig_single = NA,
-                      update_neig = F,
-                      numc = 3:11,
-                      rho = 1,
-                      n_iter = 50,
-                      use_kernel = F,
-                      weight_def = 1
-                      ){
+parties = function(kernel_list,
+                   k = 10,
+                   c,
+                   neig_single = NA,
+                   update_neig = F,
+                   numc = 3:11,
+                   rho = 1,
+                   n_iter = 50,
+                   use_kernel = F,
+                   weight_def = 1){
   # kernel distance calculation ----
   S = length(kernel_list) # number of data types
   n = nrow(kernel_list[[1]]) # number of samples
@@ -243,11 +242,6 @@ kernel_calculation = function(distance, k, sigma){
   return(W)
 }
 
-kernel_calculation_2 = function(distance){
-  mu = mean(sqrt(distance))
-  W = exp(-distance/(2*mu^2))
-  return(W)
-}
 
 diffusion_enhancement = function(kernel,
                                  alpha,
@@ -443,91 +437,6 @@ normalized_GL = function(affinity, type = 3){
 }
 
 
-purity <- function(classes, clusters)
-{
-  ClassLabels <- ClusterLabels <- ClusterSize <- numeric()
-  tmp <- table(classes, clusters)
-  i <- 1
-  while (min(dim(tmp)) > 0) {
-    ind <- which(tmp == max(tmp), arr.ind = TRUE)
-    if (nrow(ind) > 1) { #several equal max values
-      if (any(dim(tmp) < 2)) {
-        ind <- ind[1,]
-      } else {
-        #for each class with equal max, select the second max and choose minimum of that
-        ind <- ind[which.min(sapply(1:nrow(ind), function(j)
-          sort(tmp[,ind[j,2]], decreasing = TRUE)[2])), ]
-      }
-    }
-    ClassLabels[i] <- rownames(tmp)[ind[1]]
-    ClusterLabels[i] <- colnames(tmp)[ind[2]]
-    ClusterSize[i] <- max(tmp)
-    tmp <- tmp[-which(rownames(tmp) == ClassLabels[i]),
-               -which(colnames(tmp) == ClusterLabels[i]), drop = FALSE]
-    # Reevaluate the remaining table to remove all-zero rows or columns, if any
-    tmp <- tmp[rowSums(tmp) != 0, , drop = FALSE]
-    tmp <- tmp[, colSums(tmp) != 0, drop = FALSE]
-    i <- i + 1
-  }
-  out <- data.frame(ClassLabels, ClusterLabels, ClusterSize)
-  out <- out[order(out$ClassLabels),]
-  list(pur = sum(ClusterSize)/length(classes), out = out)
-}
 
-
-# Estimate number of clusters ----
-
-# S: similarity graph/ Graph laplacian to estimate,
-# num_eig = 2:11 candidate number of clusters to use to avoid picking abusion
-# is_GL = F whether the input matrix is graph laplacian
-eiggap_est_nclust = function(S, num_eig = 2:11, is_GL = F){
-  if(is_GL){
-    eig_val = sort(eigen(S)$values,decreasing = F)
-  }else{
-    eig_val = eigen(S)$values
-  }
-  former = eig_val[min(num_eig):(length(eig_val)-1)]
-  latter = eig_val[(min(num_eig)+1):(length(eig_val))]
-  diff = abs(former-latter)
-  est = which.max(diff)+ (min(num_eig)-1)
-  # if(est<min(num_eig)) est = min(num_eig)
-  if(est>max(num_eig)) est = max(num_eig)
-
-  return(est)
-}
-
-silhouette_est_nclust = function(s, d, num_eig = 2:11){
-  silhouette_vec = NULL
-  for(cs in num_eig){
-    cluster = spectralClustering(s, K = cs)
-    silhouette_obj_s = silhouette(x = cluster, dist = d)
-    silhouette_s = summary(silhouette_obj_s)$si.summary["Mean"]
-    silhouette_vec = c(silhouette_vec, silhouette_s)
-  }
-  nclust = num_eig[which.max(silhouette_vec)]
-  return(nclust)
-}
-
-perturbed_est_nclust = function(s, num_eig = 2:11, sd, iter){
-  n = nrow(s)
-  cluster_base_list = lapply(num_eig, function(c) spectralClustering(s, K = c))
-  adjRand_pert_tib = NULL
-  for(j in 1:iter){
-    rand_noise = matrix(rnorm(n*n, mean = 0, sd = sd), ncol = n, nrow = n)
-    s_pert = s+rand_noise
-    s_pert = (s_pert + t(s_pert))/2
-    cluster_perturb_list = lapply(num_eig, function(c) spectralClustering(s_pert, K = c))
-    adjRand_pert = map_dbl(1:length(num_eig), function(k) compare(cluster_perturb_list[[k]], cluster_base_list[[k]],"adjusted.rand"))
-    adjRand_pert_tib = rbind(adjRand_pert_tib, tibble(iter = j, nclust = num_eig, adjRand_pert = adjRand_pert))
-  }
-
-  mean_adjRand_pert_vec = adjRand_pert_tib %>%
-    group_by(nclust) %>%
-    summarize(mean_adjRand_pert = mean(adjRand_pert)) %>%
-    pull(mean_adjRand_pert)
-  nclust = num_eig[which.max(unclass(mean_adjRand_pert_vec))]
-
-  return(nclust)
-}
 
 

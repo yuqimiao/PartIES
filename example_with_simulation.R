@@ -1,7 +1,7 @@
 library(tidyverse)
 library(igraph)
 library(SNFtool)
-source("R/parties.R")
+source("R/PartIES.R")
 
 
 # simulation for 4 clusters, data 1 separates 12/3/4, data 2 separates 1/2/34, data 3 separates 1/2/3/4 but with vague division ----
@@ -81,12 +81,13 @@ diff_kernel_list = lapply(kernel_list, function(x) diffusion_enhancement(kernel 
 # estimate the number of clusters for each data type using eigengap
 nc_single_est = map_dbl(diff_kernel_list, function(s) estimateNumberOfClustersGivenGraph(s)[[1]])
 
-# Perform PartIES
+# Perform PartIES ----
 res_part_cimlr = parties(diff_kernel_list,
                             k = k,
                             neig_single = nc_single_est,
                             c = c, n_iter = 50)
 
+igraph::compare(res_part_cimlr$cluster, rep(1:4, each = 50), "nmi")
 
 
 
