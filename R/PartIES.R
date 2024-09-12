@@ -1,39 +1,6 @@
 # Dependency
 library(SNFtool)
 dyn.load("R/projsplx_R.so")
-# dyn.load("/Users/miaoyuqi/Library/Mobile Documents/com~apple~CloudDocs/Research/DEP_SIMLR/code/R/projsplx_R.so")
-# Main functions
-## kernel_list_generation: generate kernel list given data list and distance list, options for diffusion provided
-# Input:
-# * data_list, used when no distance_list, each matrix with n samples * p_s features as dimension
-# * distance_list: distance list for the data types
-# * k: numbers of neighbors in KNN, indicating the structure of single data
-# * sigme: kernel parameter on the denominator
-# * local_diffusion: T/F, indicating whether use the severlayer diffusion
-# * alpha: local_diffusion parameter, indicating the importance of local diffusion, default is 0.8
-# * diffusion_form: local_diffusion parameter, choose diffusion form,, L1-L3 form can be chosen,  see the function for details
-# * network_diffusion: T/F: indicating whether use the network.diffusion from [[@Wang2018Network]]
-
-kernel_list_generation = function(data_list = NA, distance_list = NA,
-                                  k = 10, sigma = 2,
-                                  local_diffusion = T, alpha = 0.8, diffusion_form = "L1",
-                                  network_diffusion = F){
-
-  if(is.na(distance_list) & !is.na(data_list)){distance_list = lapply(data_list, dist2)}
-
-  kernel_list = lapply(distance_list, function(d) kernel_calculation(distance = d, k = k, sigma=sigma))
-  # diffusion enhancement ----
-  if(local_diffusion){
-    kernel_list = lapply(kernel_list, function(kernel){
-      diffusion_enhancement(kernel = kernel,alpha = alpha, k = k, diffusion_form = diffusion_form)
-    })
-  }else if(network_diffusion){
-    kernel_list = kernel_list # not working now, try Gasteiger2020Diffusion
-  }
-
-  return(kernel_list)
-}
-
 ## parties
 # Input:
 # * kernel_list: kernels/affinity matrix generated from kernel_list_generation function, or any other similarity matrix, symmetric, semi-pos-def
@@ -56,8 +23,8 @@ parties = function(kernel_list,
                    k = 10,
                    c,
                    neig_single,
-                   n_iter = 10,
-                   thresh=1e-5
+                   n_iter = 30,
+                   thresh=1e-10
 ){
   # kernel distance calculation ----
   S = length(kernel_list) # number of data types
